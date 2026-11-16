@@ -44,7 +44,7 @@ public sealed class BillingDbContext(DbContextOptions<BillingDbContext> options)
         model.Entity<EventoProcessado>().ToTable("eventos_processados").HasKey(x => x.Id);
         model.Entity<EventoProcessado>().Property(x => x.Id).ValueGeneratedNever();
     }
-    public Task<Orcamento?> ObterOrcamentoAsync(Guid id, CancellationToken ct) => Orcamentos.Include(x => x.Itens).Include(x => x.Pagamento).ThenInclude(x => x!.Reembolsos).SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<Orcamento?> ObterOrcamentoAsync(Guid id, CancellationToken ct) => Orcamentos.Include(x => x.Itens).Include(x => x.Pagamento).ThenInclude(x => x!.Reembolsos).AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<Pagamento?> ObterPagamentoAsync(Guid id, CancellationToken ct) => Pagamentos.Include(x => x.Reembolsos).SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<Orcamento?> ObterPorOrdemAsync(Guid ordemId, CancellationToken ct) => Orcamentos.Include(x => x.Itens).Include(x => x.Pagamento).SingleOrDefaultAsync(x => x.OrdemServicoId == ordemId, ct);
     public Task<Orcamento?> ObterPorPagamentoAsync(Guid pagamentoId, CancellationToken ct) => Orcamentos.Include(x => x.Pagamento).SingleOrDefaultAsync(x => x.Pagamento!.Id == pagamentoId, ct);
