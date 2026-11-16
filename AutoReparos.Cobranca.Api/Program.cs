@@ -70,6 +70,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+if (app.Configuration.GetValue<bool>(MigracaoBancoDados.MigrarESair)) return await MigracaoBancoDados.MigrarESairAsync<BillingDbContext>(app);
 if (!app.Environment.IsEnvironment("Testing"))
 {
     await using var scope = app.Services.CreateAsyncScope();
@@ -180,4 +181,5 @@ app.MapPost("/api/v1/admin/dlq/reprocessar", async (HttpContext http, Reprocessa
     return Results.Accepted(value: await reprocessador.ReprocessarAsync(quantidade, autor, ct));
 }).RequireAuthorization("AdministrarDlq");
 app.Run();
+return 0;
 public partial class Program;
