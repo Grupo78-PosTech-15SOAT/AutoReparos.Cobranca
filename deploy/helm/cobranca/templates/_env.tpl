@@ -35,4 +35,17 @@
       name: cobranca-segredos
       key: TokenServico
       optional: true
+# Credenciais do Mercado Pago; sem elas a Cobrança sobe e o checkout responde erro de integração.
+- name: MercadoPago__AccessToken
+  valueFrom:
+    secretKeyRef:
+      name: cobranca-segredos
+      key: MercadoPagoAccessToken
+      optional: true
+- name: MercadoPago__WebhookSecret
+  valueFrom:
+    secretKeyRef:
+      name: cobranca-segredos
+      key: MercadoPagoWebhookSecret
+      optional: true
 {{- end }}
