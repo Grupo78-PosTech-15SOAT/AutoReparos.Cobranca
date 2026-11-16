@@ -71,7 +71,7 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 if (app.Configuration.GetValue<bool>(MigracaoBancoDados.MigrarESair)) return await MigracaoBancoDados.MigrarESairAsync<BillingDbContext>(app);
-if (!app.Environment.IsEnvironment("Testing"))
+if (!app.Environment.IsEnvironment("Testing") && !app.Configuration.GetValue<bool>(MigracaoBancoDados.PularNaInicializacao))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.MigrateAsync();
