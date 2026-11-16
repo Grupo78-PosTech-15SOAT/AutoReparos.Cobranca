@@ -34,6 +34,7 @@ builder.Logging.AddOpenTelemetry(logging =>
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<BillingDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Billing")));
 builder.Services.AddScoped<IBillingStore>(sp => sp.GetRequiredService<BillingDbContext>());
+builder.Services.AddHealthChecks().AddDbContextCheck<BillingDbContext>();
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddHttpClient<ICheckoutProvider, MercadoPagoClient>();
 builder.Services.AddHttpClient<IOrderReadiness, OsReadinessClient>();
@@ -69,7 +70,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
-if (!app.Environment.IsEnvironment("Testing"))
+if (app.Configuration.GetValue<bool>(MigracaoBancoDados.MigrarESair)) return await MigracaoBancoDados.MigrarESairAsync<BillingDbContext>(app);
+if (!app.Environment.IsEnvironment("Testing") && !app.Configuration.GetValue<bool>(MigracaoBancoDados.PularNaInicializacao))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.MigrateAsync();
@@ -86,6 +88,8 @@ app.Use(async (context, next) =>
     { context.Response.StatusCode = StatusCodes.Status409Conflict; await context.Response.WriteAsJsonAsync(new { codigo = "conflito_concorrencia" }); }
 });
 app.UseAuthentication(); app.UseAuthorization();
+// Probe do kubelet e health check do ALB: anônima mesmo se uma política de fallback passar a exigir autenticação.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 var orcamentos = app.MapGroup("/api/v1/orcamentos").RequireAuthorization("OperarBilling");
 orcamentos.MapPost("", async (CriarOrcamento request, BillingService service, CancellationToken ct) =>
@@ -177,4 +181,5 @@ app.MapPost("/api/v1/admin/dlq/reprocessar", async (HttpContext http, Reprocessa
     return Results.Accepted(value: await reprocessador.ReprocessarAsync(quantidade, autor, ct));
 }).RequireAuthorization("AdministrarDlq");
 app.Run();
+return 0;
 public partial class Program;

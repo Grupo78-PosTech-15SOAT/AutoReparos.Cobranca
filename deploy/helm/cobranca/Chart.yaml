@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cobranca
+description: Chart do serviço de Cobrança do AutoReparos, implantado pelo job deploy do próprio repositório
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
