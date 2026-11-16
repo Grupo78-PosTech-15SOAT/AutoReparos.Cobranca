@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ConsumirFilasProprias",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:SendMessage"
+      ],
+      "Resource": [
+        "arn:aws:sqs:${regiao}:${conta}:autoreparos-cobranca-comandos",
+        "arn:aws:sqs:${regiao}:${conta}:autoreparos-cobranca-comandos-dlq",
+        "arn:aws:sqs:${regiao}:${conta}:autoreparos-cobranca-saida-dlq"
+      ]
+    },
+    {
+      "Sid": "PublicarNaSaga",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:SendMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl"
+      ],
+      "Resource": [
+        "arn:aws:sqs:${regiao}:${conta}:autoreparos-os-saga"
+      ]
+    }
+  ]
+}
