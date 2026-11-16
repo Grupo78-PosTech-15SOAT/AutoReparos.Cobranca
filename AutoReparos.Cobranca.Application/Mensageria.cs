@@ -37,7 +37,7 @@ public static class MensagensSaga
     {
         var id = IdDeterministico($"{TiposMensagem.OrcamentoAprovado}:{orcamento.Id}");
         var envelope = new EnvelopeOrcamentoAprovado(id, TiposMensagem.OrcamentoAprovado, orcamento.OrdemServicoId, ocorreuEmUtc, orcamento.Id, orcamento.ClienteId, ItensParaReserva(orcamento));
-        return new MensagemSaida(id, envelope.Tipo, JsonSerializer.Serialize(envelope, Json), ocorreuEmUtc);
+        return new MensagemSaida(id, envelope.Tipo, ContextoTrace.Serializar(envelope, Json), ocorreuEmUtc);
     }
 
     // Só os insumos do orçamento aprovado entram na reserva (D-32); serviços não têm saldo. Lista vazia quando o orçamento não tem insumos.
@@ -47,13 +47,13 @@ public static class MensagensSaga
     public static MensagemSaida OrcamentoCancelado(Guid eventId, Guid? correlacaoId, Guid ordemServicoId, Guid orcamentoId, DateTime ocorreuEmUtc)
     {
         var envelope = new EnvelopeOrcamentoCancelado(eventId, TiposMensagem.OrcamentoCancelado, correlacaoId, ordemServicoId, ocorreuEmUtc, orcamentoId);
-        return new MensagemSaida(eventId, envelope.Tipo, JsonSerializer.Serialize(envelope, Json), ocorreuEmUtc);
+        return new MensagemSaida(eventId, envelope.Tipo, ContextoTrace.Serializar(envelope, Json), ocorreuEmUtc);
     }
 
     public static MensagemSaida CancelamentoRecusado(Guid eventId, Guid? correlacaoId, Guid ordemServicoId, Guid orcamentoId, string motivo, DateTime ocorreuEmUtc)
     {
         var envelope = new EnvelopeCancelamentoRecusado(eventId, TiposMensagem.OrcamentoCancelamentoRecusado, correlacaoId, ordemServicoId, ocorreuEmUtc, orcamentoId, motivo);
-        return new MensagemSaida(eventId, envelope.Tipo, JsonSerializer.Serialize(envelope, Json), ocorreuEmUtc);
+        return new MensagemSaida(eventId, envelope.Tipo, ContextoTrace.Serializar(envelope, Json), ocorreuEmUtc);
     }
 
     /// <summary>eventId estável por pagamento + status + referência: a republicação após falha mantém o mesmo identificador.</summary>
