@@ -111,6 +111,21 @@ public sealed partial class BillingLifecycleTests
         Assert.Equal(StatusPagamento.Pendente, payment.Status); Assert.Empty(publisher.Events);
     }
 
+    [Fact]
+    public async Task WebhookComPagamentoInexistenteNoMercadoPagoResponde422SemTentativas()
+    {
+        var (store, _, payment) = SeedPayment(); payment.IniciarCheckout("https://checkout.example/1", "preference-1");
+        var alerts = new Alerts(); var handler = new FakeHandler(_ => Json(HttpStatusCode.NotFound, """{"message":"Payment not found","status":404}"""));
+        var publisher = new Publisher();
+        using var factory = new BillingApiFactory(store, MercadoPago(handler, alerts), publisher, alerts, new Readiness(true));
+        using var client = factory.CreateClient();
+        var response = await SendWebhook(client, dataId: "999999999");
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains("pagamento_provedor_invalido", await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, handler.Calls); Assert.Equal(0, alerts.Count);
+        Assert.Equal(StatusPagamento.Pendente, payment.Status); Assert.Empty(publisher.Events);
+    }
+
     private static ICheckoutProvider MercadoPagoAsProvider(FakeHandler handler) => MercadoPago(handler, new Alerts());
 
     // --- C8: retry com backoff e jitter nas integracoes HTTP (achados 2 e 3)
