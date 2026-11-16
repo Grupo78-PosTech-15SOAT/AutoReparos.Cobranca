@@ -42,7 +42,14 @@ public sealed class MercadoPagoClient(HttpClient http, IConfiguration config, IA
         using var body = ParseBody(await response.Content.ReadAsStringAsync(token)); return Required(body.RootElement, "id");
     }, ct);
 
-    public Task<(Guid PagamentoId, AutoReparos.Cobranca.Domain.StatusPagamento Status, string Referencia)?> ConsultarPagamentoAsync(string id, CancellationToken ct) => RequestWithRetryAsync<(Guid, AutoReparos.Cobranca.Domain.StatusPagamento, string)?>(
+    // 404 na consulta: o id do webhook não é um pagamento do Mercado Pago; vira null (422 no webhook), sem tentativas.
+    public async Task<(Guid PagamentoId, AutoReparos.Cobranca.Domain.StatusPagamento Status, string Referencia)?> ConsultarPagamentoAsync(string id, CancellationToken ct)
+    {
+        try { return await ConsultarPagamentoNoProvedorAsync(id, ct); }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
+    }
+
+    private Task<(Guid PagamentoId, AutoReparos.Cobranca.Domain.StatusPagamento Status, string Referencia)?> ConsultarPagamentoNoProvedorAsync(string id, CancellationToken ct) => RequestWithRetryAsync<(Guid, AutoReparos.Cobranca.Domain.StatusPagamento, string)?>(
         "billing.mercadopago.reconciliation_failed", () =>
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.mercadopago.com/v1/payments/{Uri.EscapeDataString(id)}");
