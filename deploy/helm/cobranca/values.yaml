@@ -1,0 +1,57 @@
+# Valores do chart da Cobrança. O job deploy informa image.*, aws.conta, serviceAccount.roleArn e autenticacao.emissor.
+
+image:
+  repository: ""  # URL do ECR autoreparos-cobranca (output ecr_url do Terraform)
+  tag: ""         # SHA do commit
+  pullPolicy: IfNotPresent
+
+aws:
+  conta: ""
+  regiao: us-east-1
+
+serviceAccount:
+  roleArn: ""  # role IRSA autoreparos-cobranca-irsa (output irsa_role_arn do Terraform)
+
+database:
+  variavel: ConnectionStrings__Billing  # chave do Secret cobranca-database
+
+autenticacao:
+  emissor: ""    # URL pública do API Gateway (/autoreparos/production/apigateway/endpoint), emissor dos tokens do Cadastros
+  audiencia: ""  # audiência exigida no JWT; vazia não define Authentication__Audience
+
+telemetria:
+  nomeServico: autoreparos-cobranca
+  otlpEndpoint: http://autoreparos-otel-collector.autoreparos.svc.cluster.local:4317
+
+# Nomes das filas (a fila pertence ao consumidor e é criada pelo Terraform dele).
+filas:
+  saga: autoreparos-os-saga                    # entrada da Saga do OS: orcamento.aprovado.v1, pagamento.resultado.v1, respostas
+  saidaDlq: autoreparos-cobranca-saida-dlq     # mensagens do outbox esgotadas
+  comandos: autoreparos-cobranca-comandos      # comandos da Saga enviados pelo OS
+  comandosDlq: autoreparos-cobranca-comandos-dlq
+
+integracoes:
+  osBaseUrl: http://os.os.svc.cluster.local:8080
+  execucaoBaseUrl: http://execucao.execucao.svc.cluster.local:8080
+
+ingress:
+  ordem: 20
+  prefixos:
+    - /api/v1/orcamentos
+    - /api/v1/pagamentos
+    - /api/v1/webhooks/mercado-pago
+
+hpa:
+  cpu: 80
+
+migracao:
+  prazoSegundos: 600
+
+# Dois nós t3.medium dividem os quatro serviços, o Web e a observabilidade.
+resources:
+  requests:
+    cpu: 50m
+    memory: 160Mi
+  limits:
+    cpu: 500m
+    memory: 384Mi
