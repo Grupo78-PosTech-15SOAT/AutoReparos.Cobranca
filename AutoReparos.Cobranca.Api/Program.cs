@@ -34,6 +34,7 @@ builder.Logging.AddOpenTelemetry(logging =>
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<BillingDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Billing")));
 builder.Services.AddScoped<IBillingStore>(sp => sp.GetRequiredService<BillingDbContext>());
+builder.Services.AddHealthChecks().AddDbContextCheck<BillingDbContext>();
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddHttpClient<ICheckoutProvider, MercadoPagoClient>();
 builder.Services.AddHttpClient<IOrderReadiness, OsReadinessClient>();
@@ -86,6 +87,8 @@ app.Use(async (context, next) =>
     { context.Response.StatusCode = StatusCodes.Status409Conflict; await context.Response.WriteAsJsonAsync(new { codigo = "conflito_concorrencia" }); }
 });
 app.UseAuthentication(); app.UseAuthorization();
+// Probe do kubelet e health check do ALB: anônima mesmo se uma política de fallback passar a exigir autenticação.
+app.MapHealthChecks("/health").AllowAnonymous();
 
 var orcamentos = app.MapGroup("/api/v1/orcamentos").RequireAuthorization("OperarBilling");
 orcamentos.MapPost("", async (CriarOrcamento request, BillingService service, CancellationToken ct) =>
