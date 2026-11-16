@@ -37,6 +37,7 @@ builder.Services.AddScoped<IBillingStore>(sp => sp.GetRequiredService<BillingDbC
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddHttpClient<ICheckoutProvider, MercadoPagoClient>();
 builder.Services.AddHttpClient<IOrderReadiness, OsReadinessClient>();
+builder.Services.AddHttpClient<ICatalogoPrecos, CatalogoExecucaoClient>();
 builder.Services.AddSingleton<IWebhookSignatureValidator, MercadoPagoSignatureValidator>();
 builder.Services.AddSingleton<IAmazonSQS, AmazonSQSClient>();
 builder.Services.AddScoped<IAlertSink, LoggingAlertSink>();
@@ -44,6 +45,7 @@ builder.Services.AddScoped<IResultadoPublisher, SqsResultPublisher>();
 builder.Services.AddScoped<IEventosProcessadosStore>(sp => sp.GetRequiredService<BillingDbContext>());
 builder.Services.AddScoped<CancelamentoOrcamentoService>();
 builder.Services.AddScoped<OutboxProcessor>();
+builder.Services.AddScoped<ReprocessadorDlq>();
 builder.Services.AddSingleton<ProcessadorComandos>();
 // Em testes (ambiente Testing) os serviços em segundo plano não sobem: cada teste os cria sobre o seu banco e o seu SQS falso.
 if (!builder.Environment.IsEnvironment("Testing"))
@@ -61,6 +63,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ServicoOS", p => p.RequireRole("ServicoOS"));
     options.AddPolicy("OperarBilling", p => p.RequireRole("Administrador", "Atendente", "ServicoOS"));
     options.AddPolicy("AprovarReembolso", p => p.RequireRole("Administrador"));
+    options.AddPolicy("AdministrarDlq", p => p.RequireRole("Administrador"));
     options.AddPolicy("AprovarOrcamento", p => p.RequireRole("Cliente"));
     options.AddPolicy("IniciarCheckout", p => p.RequireRole("Administrador", "Atendente", "Mecanico", "ServicoOS", "Cliente"));
 });
@@ -87,10 +90,25 @@ app.UseAuthentication(); app.UseAuthorization();
 var orcamentos = app.MapGroup("/api/v1/orcamentos").RequireAuthorization("OperarBilling");
 orcamentos.MapPost("", async (CriarOrcamento request, BillingService service, CancellationToken ct) =>
 {
-    if (request.OrdemServicoId == Guid.Empty || request.ClienteId == Guid.Empty || request.Valor <= 0 || request.Valor > LimitesBilling.ValorMaximo || decimal.Round(request.Valor, 2) != request.Valor)
+    var comItens = request.Itens is { Count: > 0 };
+    if (request.OrdemServicoId == Guid.Empty || request.ClienteId == Guid.Empty
+        || (comItens ? request.Valor != 0 || !ItemOrcamentoSolicitado.ListaValida(request.Itens!)
+            : request.Itens is not null || request.Valor <= 0 || request.Valor > LimitesBilling.ValorMaximo || decimal.Round(request.Valor, 2) != request.Valor))
         return Results.UnprocessableEntity(new { codigo = "orcamento_invalido" });
-    var result = await service.CriarOrcamentoAsync(request, ct);
-    return Results.Created($"/api/v1/orcamentos/{result.Id}", new { result.Id, result.OrdemServicoId, result.ClienteId, result.Valor, status = result.Status.ToString(), approvalUrl = $"/api/v1/orcamentos/{result.Id}/aprovacao" });
+    Orcamento result;
+    try { result = await service.CriarOrcamentoAsync(request, ct); }
+    catch (ItemCatalogoInexistenteException ex) { return Results.UnprocessableEntity(new { codigo = "item_catalogo_inexistente", tipo = ex.Tipo, referenciaId = ex.ReferenciaId }); }
+    catch (ArgumentException) { return Results.UnprocessableEntity(new { codigo = "orcamento_invalido" }); }
+    return Results.Created($"/api/v1/orcamentos/{result.Id}", new
+    {
+        result.Id,
+        result.OrdemServicoId,
+        result.ClienteId,
+        result.Valor,
+        status = result.Status.ToString(),
+        approvalUrl = $"/api/v1/orcamentos/{result.Id}/aprovacao",
+        itens = result.Itens.Select(i => new { tipo = i.Tipo.ToString(), i.ReferenciaId, i.Descricao, i.Quantidade, i.PrecoUnitario, i.Subtotal })
+    });
 });
 app.MapPost("/api/v1/orcamentos/{id:guid}/aprovacao", async (Guid id, HttpContext context, BillingService service, CancellationToken ct) =>
 {
@@ -143,5 +161,20 @@ app.MapPost("/api/v1/webhooks/mercado-pago", async (HttpRequest request, IWebhoo
     }
 }).AllowAnonymous();
 
+app.MapPost("/api/v1/admin/dlq/reprocessar", async (HttpContext http, ReprocessadorDlq reprocessador, CancellationToken ct) =>
+{
+    if (!http.Request.HasJsonContentType()) return Results.UnprocessableEntity(new { codigo = "quantidade_invalida" });
+    int quantidade;
+    try
+    {
+        using var corpo = await System.Text.Json.JsonDocument.ParseAsync(http.Request.Body, cancellationToken: ct);
+        if (corpo.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object || !corpo.RootElement.TryGetProperty("quantidade", out var q)
+            || !q.TryGetInt32(out quantidade) || quantidade < 1 || quantidade > ReprocessadorDlq.QuantidadeMaxima)
+            return Results.UnprocessableEntity(new { codigo = "quantidade_invalida" });
+    }
+    catch (System.Text.Json.JsonException) { return Results.UnprocessableEntity(new { codigo = "quantidade_invalida" }); }
+    var autor = http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? http.User.FindFirst("sub")?.Value ?? "desconhecido";
+    return Results.Accepted(value: await reprocessador.ReprocessarAsync(quantidade, autor, ct));
+}).RequireAuthorization("AdministrarDlq");
 app.Run();
 public partial class Program;
