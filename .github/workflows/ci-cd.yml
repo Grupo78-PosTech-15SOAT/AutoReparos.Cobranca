@@ -187,6 +187,7 @@ jobs:
       - name: Criar os Secrets do serviço
         env:
           SEGREDO_DATABASE_ARN: ${{ steps.terraform.outputs.segredo_database_arn }}
+          TOKEN_SERVICO: ${{ secrets.TOKEN_SERVICO }}
         run: |
           set -euo pipefail
           conexao="$(aws secretsmanager get-secret-value --secret-id "$SEGREDO_DATABASE_ARN" --query SecretString --output text | jq -r '.connectionString')"
@@ -196,6 +197,14 @@ jobs:
             '{apiVersion:"v1",kind:"Secret",metadata:{name:"cobranca-database"},type:"Opaque",stringData:{"ConnectionStrings__Billing":$conexao}}' \
             | kubectl apply -n "$SERVICO" -f -
           unset conexao
+          # Token de serviço da Cobrança no OS e na Execução (D-58), gerado pelo scripts/infra/configurar-github.sh do pai.
+          if [ -n "$TOKEN_SERVICO" ]; then
+            jq -n --arg token "$TOKEN_SERVICO" \
+              '{apiVersion:"v1",kind:"Secret",metadata:{name:"cobranca-segredos"},type:"Opaque",stringData:{"TokenServico":$token}}' \
+              | kubectl apply -n "$SERVICO" -f -
+          else
+            echo '::warning::TOKEN_SERVICO vazio: a Cobrança chama o OS e a Execução sem token e recebe 401 (rode o configurar-github.sh do pai depois do provisionamento)'
+          fi
       - name: Implantar com Helm
         env:
           ECR_URL: ${{ steps.terraform.outputs.ecr_url }}

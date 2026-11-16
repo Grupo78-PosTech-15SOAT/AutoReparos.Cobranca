@@ -22,4 +22,17 @@
   value: {{ .Values.integracoes.osBaseUrl | quote }}
 - name: Execucao__BaseUrl
   value: {{ .Values.integracoes.execucaoBaseUrl | quote }}
+# Token de serviço (D-58): o mesmo JWT do Cadastros autentica a Cobrança no OS e na Execução.
+- name: OsService__BearerToken
+  valueFrom:
+    secretKeyRef:
+      name: cobranca-segredos
+      key: TokenServico
+      optional: true
+- name: Execucao__BearerToken
+  valueFrom:
+    secretKeyRef:
+      name: cobranca-segredos
+      key: TokenServico
+      optional: true
 {{- end }}
