@@ -2,6 +2,15 @@
 
 Cobrança is the isolated service for OS budgets, customer approval, Mercado Pago Checkout Pro, payment notifications, and authorized refunds. It owns its PostgreSQL schema and does not read the OS database.
 
+## Arquitetura
+
+- **Papel:** dono do orçamento aprovado pelo cliente, do pagamento (Mercado Pago Checkout Pro), do webhook de notificação e do reembolso autorizado. Não conhece o banco do OS.
+- **Camadas:** `AutoReparos.Cobranca.Domain` (orçamento, pagamento, reembolso, outbox), `.Application` (`BillingService`, contratos), `.Infrastructure` (EF Core + Npgsql, consumidores e publicador SQS, cliente do Mercado Pago, `ReprocessadorDlq`) e `.Api` (Minimal API com JWT).
+- **Banco:** PostgreSQL próprio (`ConnectionStrings__Billing`; `cobranca_db` na spec de bancos), com migrações aplicadas na inicialização.
+- **Papel na Saga:** a Saga é orquestrada pelo OS Service; o Cobrança é participante e só fala por mensagens SQS. Publica `orcamento.aprovado.v1`, `pagamento.resultado.v1`, `orcamento.cancelado.v1` e `orcamento.cancelamento-recusado.v1` na fila de entrada da Saga e consome o comando `cobranca.cancelar-orcamento.v1` (compensação) na sua fila de comandos. Detalhes na seção "Contrato de mensagens da Saga (v1)".
+- **Comunicação:** HTTP síncrono apenas para chamar o OS Service (confirmar a conclusão) e o Mercado Pago; o OS chama o Cobrança por `POST /api/v1/orcamentos`. A autenticação valida o JWT emitido pelo Cadastros.
+- **Resiliência:** outbox transacional (`mensagens_saida`), deduplicação por `eventId` (`eventos_processados`), retry com backoff e DLQ, e reprocessamento administrativo em `POST /api/v1/admin/dlq/reprocessar`.
+
 ## Configuration
 
 Set these values through environment variables or a secret manager:
@@ -83,3 +92,9 @@ Para o job `quality` passar, o repositório precisa destes itens em **Settings �
 O projeto `Grupo78-PosTech-15SOAT_AutoReparos.Cobranca` precisa existir no SonarCloud (ou o token precisa poder criá-lo). Nunca versione o token. Depois de criar o secret, reexecute o job `quality` da última execução; não é preciso novo commit.
 
 Quando a proteção da `main` for aplicada (AD-026 do repositório pai), os jobs `build`, `test` e `quality` serão os status checks obrigatórios.
+
+## Cobertura
+
+O limite mínimo é de **80%** de cobertura de linhas. No CI (`.github/workflows/ci-cd.yml`) o job `test` roda os testes de `AutoReparos.Cobranca.Tests` com `XPlat Code Coverage` (formatos Cobertura e OpenCover) e o script `.github/scripts/verificar_cobertura.py` une os relatórios `coverage.cobertura.xml` e falha se o total ficar abaixo de `MINIMO_COBERTURA` (80). O job `quality` envia os relatórios OpenCover ao SonarCloud e espera o quality gate (migrações e `bin`/`obj` ficam fora da análise).
+
+Relatório do SonarCloud: https://sonarcloud.io/project/overview?id=Grupo78-PosTech-15SOAT_AutoReparos.Cobranca
