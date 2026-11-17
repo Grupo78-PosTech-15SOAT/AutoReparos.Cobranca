@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         {{- include "servico.rotulos" . | nindent 8 }}
+      {{- with .Values.segredos.checksum }}
+      annotations:
+        checksum/segredos: {{ . | quote }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "servico.nome" . }}
       {{- include "servico.seguranca" . | nindent 6 }}

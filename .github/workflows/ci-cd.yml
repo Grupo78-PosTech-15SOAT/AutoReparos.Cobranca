@@ -185,6 +185,7 @@ jobs:
       - name: Conectar ao EKS
         run: aws eks update-kubeconfig --name '${{ steps.plataforma.outputs.cluster }}' --region "$AWS_REGION"
       - name: Criar os Secrets do serviço
+        id: segredos
         env:
           SEGREDO_DATABASE_ARN: ${{ steps.terraform.outputs.segredo_database_arn }}
           TOKEN_SERVICO: ${{ secrets.TOKEN_SERVICO }}
@@ -209,12 +210,17 @@ jobs:
               stringData:({"TokenServico":$token,"MercadoPagoAccessToken":$acesso,"MercadoPagoWebhookSecret":$webhook}
                           | with_entries(select(.value != "")))}' \
             | kubectl apply -n "$SERVICO" -f -
+          # Hash dos dois Secrets para a anotação do pod: trocar só um segredo (sem imagem nova) também reinicia o pod,
+          # senão as variáveis lidas de secretKeyRef continuam com o valor antigo até o próximo restart.
+          checksum="$(for nome in cobranca-database cobranca-segredos; do kubectl get secret "$nome" -n "$SERVICO" -o jsonpath='{.data}'; echo; done | sha256sum | cut -d' ' -f1)"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
       - name: Implantar com Helm
         env:
           ECR_URL: ${{ steps.terraform.outputs.ecr_url }}
           IRSA_ROLE_ARN: ${{ steps.terraform.outputs.irsa_role_arn }}
           CONTA: ${{ steps.plataforma.outputs.conta }}
           EMISSOR: ${{ steps.plataforma.outputs.emissor }}
+          CHECKSUM_SEGREDOS: ${{ steps.segredos.outputs.checksum }}
         run: |
           set -euo pipefail
           helm upgrade --install "$SERVICO" "deploy/helm/$SERVICO" \
@@ -224,7 +230,8 @@ jobs:
             --set-string image.pullPolicy=Always \
             --set-string aws.conta="$CONTA" \
             --set-string serviceAccount.roleArn="$IRSA_ROLE_ARN" \
-            --set-string autenticacao.emissor="$EMISSOR"
+            --set-string autenticacao.emissor="$EMISSOR" \
+            --set-string segredos.checksum="$CHECKSUM_SEGREDOS"
       - name: Verificar o rollout e o GET /health
         run: |
           set -euo pipefail
