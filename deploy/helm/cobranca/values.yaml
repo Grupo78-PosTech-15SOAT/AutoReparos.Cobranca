@@ -15,6 +15,11 @@ serviceAccount:
 database:
   variavel: ConnectionStrings__Billing  # chave do Secret cobranca-database
 
+# Hash dos Secrets cobranca-database e cobranca-segredos, calculado pelo job deploy. Vai como anotação do pod:
+# quando um segredo muda, o pod é recriado e lê o valor novo. Vazio (instalação local) não anota.
+segredos:
+  checksum: ""
+
 autenticacao:
   emissor: ""    # URL pública do API Gateway (/autoreparos/production/apigateway/endpoint), emissor dos tokens do Cadastros
   audiencia: "autoreparos"  # aud emitido pelo Cadastros (D-57); vazia não define Authentication__Audience
