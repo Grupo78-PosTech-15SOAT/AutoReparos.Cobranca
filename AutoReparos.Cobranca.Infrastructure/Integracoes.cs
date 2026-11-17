@@ -144,7 +144,7 @@ public sealed class SqsResultPublisher(IAmazonSQS sqs, IConfiguration config, IL
     {
         var main = config["Sqs:QueueUrl"] ?? throw new InvalidOperationException("SQS principal não configurada.");
         var dlq = config["Sqs:DeadLetterQueueUrl"] ?? throw new InvalidOperationException("SQS DLQ não configurada.");
-        await SqsEnvio.EnviarAsync(sqs, alerts, logger, main, dlq, JsonSerializer.Serialize(evento, MensagensSaga.Json), evento.PagamentoId.ToString(), ct, delay);
+        await SqsEnvio.EnviarAsync(sqs, alerts, logger, main, dlq, ContextoTrace.Serializar(evento, MensagensSaga.Json), evento.PagamentoId.ToString(), ct, delay);
     }
 }
 

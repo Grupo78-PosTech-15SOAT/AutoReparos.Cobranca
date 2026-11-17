@@ -168,7 +168,8 @@ public sealed partial class BillingLifecycleTests
         });
 
     private static JsonElement Parse(string body) => JsonDocument.Parse(body).RootElement.Clone();
-    private static string[] Names(JsonElement element) => [.. element.EnumerateObject().Select(p => p.Name)];
+    // Os campos opcionais de trace (D-65) dependem de haver ouvinte de Activity no processo; são provados em TraceMensageriaTests.
+    private static string[] Names(JsonElement element) => [.. element.EnumerateObject().Select(p => p.Name).Where(nome => nome is not ("traceparent" or "tracestate"))];
 
     private static void AssertUtcRecent(JsonElement envelope)
     {

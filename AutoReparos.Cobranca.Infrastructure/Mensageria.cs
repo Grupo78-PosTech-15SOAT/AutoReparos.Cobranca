@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Amazon.SQS;
 using AutoReparos.Cobranca.Application;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,8 @@ public static class SqsEnvio
     public static async Task<(ResultadoEnvio Resultado, int Tentativas)> EnviarAsync(IAmazonSQS sqs, IAlertSink alerts, ILogger logger,
         string fila, string dlq, string corpo, string chave, CancellationToken ct, Func<int, TimeSpan>? delay = null)
     {
+        // Span Producer filho do contexto gravado no envelope; o corpo segue inalterado.
+        using var atividade = ContextoTrace.IniciarAtividade("publicar", ActivityKind.Producer, corpo);
         for (var tentativa = 1; ; tentativa++)
         {
             try { await sqs.SendMessageAsync(fila, corpo, ct); return (ResultadoEnvio.Enviada, tentativa); }
@@ -100,6 +103,8 @@ public sealed class ProcessadorComandos(IServiceScopeFactory scopes, IAmazonSQS 
     public async Task<DesfechoComando> ProcessarAsync(string corpo, CancellationToken ct)
     {
         var dlq = config["Sqs:ComandosDeadLetterQueueUrl"] ?? throw new InvalidOperationException("DLQ de comandos não configurada.");
+        // Span Consumer filho do contexto do envelope; sem traceparent válido, raiz nova (a mensagem segue o fluxo normal).
+        using var atividade = ContextoTrace.IniciarAtividade("processar", ActivityKind.Consumer, corpo);
         var desfecho = DesfechoComando.DeadLetter;
         try
         {
