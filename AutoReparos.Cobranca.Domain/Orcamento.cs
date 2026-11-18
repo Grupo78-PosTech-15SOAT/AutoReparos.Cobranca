@@ -20,7 +20,7 @@ public sealed class Orcamento
     {
         if (itens is null || itens.Count is 0 or > LimitesItensOrcamento.ItensMaximos) throw new ArgumentException("Orçamento inválido.");
         foreach (var item in itens) ItemOrcamento.Validar(item);
-        return itens.Sum(i => i.Quantidade * i.PrecoUnitario);
+        return itens.Sum(i => i.PrecoUnitario);
     }
     public Guid Id { get; private set; }
     public Guid OrdemServicoId { get; private set; }
